@@ -325,6 +325,12 @@ test('codex picker includes gpt-5.1 model family', () => {
   assert.equal(pickerModels.has('gpt-5.1-codex-mini'), true);
 });
 
+test('cursor-agent picker includes composer-2.5', () => {
+  const pickerModels = new Set(cursorAgent.fallbackModels.map((model) => model.id));
+
+  assert.equal(pickerModels.has('composer-2.5'), true);
+});
+
 test('cursor-agent parses live model ids separately from display labels', () => {
   assert.ok(cursorAgent.listModels, 'cursor-agent must define live model discovery');
   const parsed = cursorAgent.listModels.parse([

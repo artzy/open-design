@@ -840,13 +840,131 @@ async function renderImageRouterVideo(ctx: MediaContext, credentials: ProviderCo
   };
 }
 
+function isStableDiffusionWebUIBaseUrl(baseUrl: string): boolean {
+  const trimmed = baseUrl.trim();
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('/v1') || lower.includes('/images/generations')) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return /\/sdapi\//i.test(trimmed);
+  }
+  if (/\/sdapi\//i.test(parsed.pathname)) return true;
+  const host = parsed.hostname.toLowerCase();
+  const isLocal =
+    host === 'localhost'
+    || host === '127.0.0.1'
+    || host === '0.0.0.0'
+    || host === '[::1]';
+  if (!isLocal) return false;
+  const path = parsed.pathname.replace(/\/+$/, '');
+  return path === '' || path === '/';
+}
+
+function normalizeStableDiffusionWebUIBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return trimmed.replace(/\/sdapi\/v1\/.*$/i, '');
+  }
+  let path = parsed.pathname.replace(/\/+$/, '').replace(/\/sdapi\/v1\/.*$/i, '');
+  if (!path) path = '/';
+  parsed.pathname = path;
+  return parsed.toString().replace(/\/$/, '');
+}
+
+function buildStableDiffusionWebUITxt2imgUrl(baseUrl: string): string {
+  const root = normalizeStableDiffusionWebUIBaseUrl(baseUrl);
+  return `${root}/sdapi/v1/txt2img`;
+}
+
+function parseOpenAISize(size: string): { width: number; height: number } {
+  const match = /^(\d+)x(\d+)$/i.exec(size.trim());
+  if (!match) return { width: 512, height: 512 };
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+function headersForCustomImageProvider(credentials: ProviderConfig): Record<string, string> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  };
+  const apiKey = credentials.apiKey?.trim();
+  if (!apiKey) return headers;
+  if (apiKey.includes(':')) {
+    headers.authorization = `Basic ${Buffer.from(apiKey, 'utf8').toString('base64')}`;
+    return headers;
+  }
+  headers.authorization = `Bearer ${apiKey}`;
+  return headers;
+}
+
+async function bytesFromStableDiffusionWebUIResponse(data: unknown, providerTag: string): Promise<Buffer> {
+  const images =
+    data && typeof data === 'object' && Array.isArray((data as { images?: unknown }).images)
+      ? (data as { images: unknown[] }).images
+      : null;
+  if (!images || typeof images[0] !== 'string' || !images[0]) {
+    throw new Error(`${providerTag} response had no images[0]`);
+  }
+  const raw = images[0];
+  const b64 = raw.includes(',') ? raw.slice(raw.indexOf(',') + 1) : raw;
+  return Buffer.from(b64, 'base64');
+}
+
+async function renderStableDiffusionWebUIImage(
+  ctx: MediaContext,
+  credentials: ProviderConfig,
+): Promise<RenderResult> {
+  const baseUrl = (credentials.baseUrl || '').trim();
+  const wireModel = (
+    credentials.model?.trim()
+    || (ctx.wireModel !== CUSTOM_IMAGE_MODEL_ID ? ctx.wireModel : '')
+    || 'default'
+  ).trim();
+  const size = openaiSizeFor('gpt-image-1', ctx.aspect);
+  const { width, height } = parseOpenAISize(size);
+  const body: Record<string, unknown> = {
+    prompt: ctx.prompt || 'A high-quality reference image.',
+    negative_prompt: '',
+    steps: 20,
+    width,
+    height,
+    cfg_scale: 7,
+    sampler_name: 'Euler a',
+  };
+  if (wireModel && wireModel !== 'default') {
+    body.override_settings = { sd_model_checkpoint: wireModel };
+  }
+
+  const resp = await fetch(buildStableDiffusionWebUITxt2imgUrl(baseUrl), {
+    method: 'POST',
+    headers: headersForCustomImageProvider(credentials),
+    body: JSON.stringify(body),
+  });
+  const data = await parseOpenAICompatibleJson(resp, 'stable-diffusion-webui');
+  const bytes = await bytesFromStableDiffusionWebUIResponse(data, 'stable-diffusion-webui');
+  return {
+    bytes,
+    providerNote: `custom-image/webui/${wireModel} · ${width}x${height} · ${bytes.length} bytes`,
+    suggestedExt: sniffImageExt(bytes),
+  };
+}
+
 async function renderCustomOpenAIImage(ctx: MediaContext, credentials: ProviderConfig): Promise<RenderResult> {
   const baseUrl = (credentials.baseUrl || '').trim();
   if (!baseUrl) {
     throw new Error(
-      'Custom Image API base URL required — configure a /v1/images/generations compatible endpoint in Settings',
+      'Custom Image API base URL required — configure a WebUI base URL or /v1/images/generations endpoint in Settings',
     );
   }
+  if (isStableDiffusionWebUIBaseUrl(baseUrl)) {
+    return renderStableDiffusionWebUIImage(ctx, credentials);
+  }
+
   const wireModel = (
     credentials.model
     || (ctx.wireModel !== CUSTOM_IMAGE_MODEL_ID ? ctx.wireModel : '')
@@ -857,12 +975,6 @@ async function renderCustomOpenAIImage(ctx: MediaContext, credentials: ProviderC
     );
   }
 
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-  };
-  if (credentials.apiKey) {
-    headers.authorization = `Bearer ${credentials.apiKey}`;
-  }
   const body: Record<string, unknown> = {
     prompt: ctx.prompt || 'A high-quality reference image.',
     model: wireModel,
@@ -872,7 +984,7 @@ async function renderCustomOpenAIImage(ctx: MediaContext, credentials: ProviderC
 
   const resp = await fetch(buildOpenAIImageUrl(baseUrl, false), {
     method: 'POST',
-    headers,
+    headers: headersForCustomImageProvider(credentials),
     body: JSON.stringify(body),
   });
   const data = await parseOpenAICompatibleJson(resp, 'custom image');

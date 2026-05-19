@@ -434,7 +434,7 @@ test('detectAgents surfaces Cursor Agent model labels without putting labels in 
       if (process.platform === 'win32') {
         writeFileSync(
           bin,
-          '@echo off\r\nif "%~1"=="--version" echo 2026.05.16-test& exit /b 0\r\nif "%~1"=="models" (\r\n  echo Available models\r\n  echo auto - Auto\r\n  echo composer-2.5 - Composer 2.5 (current)\r\n  exit /b 0\r\n)\r\nif "%~1"=="status" echo Authenticated& exit /b 0\r\nexit /b 0\r\n',
+          '@echo off\r\nif "%~1"=="--version" echo 2026.05.16-test& exit /b 0\r\nif "%~1"=="models" (\r\n  echo Available models\r\n  echo auto - Auto\r\n  echo composer-2.5 - Composer 2.5 ^(current^)\r\n  exit /b 0\r\n)\r\nif "%~1"=="status" echo Authenticated& exit /b 0\r\nexit /b 0\r\n',
         );
       } else {
         writeFileSync(
@@ -490,7 +490,7 @@ test('detectAgents keeps Cursor Agent available when auth is missing', async () 
       assert.match(detected?.authMessage ?? '', /cursor-agent login/);
       assert.deepEqual(
         detected?.models.map((model) => model.id),
-        ['default', 'auto', 'sonnet-4', 'sonnet-4-thinking', 'gpt-5'],
+        ['default', 'auto', 'composer-2.5', 'sonnet-4', 'sonnet-4-thinking', 'gpt-5'],
       );
     });
   } finally {

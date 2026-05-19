@@ -135,11 +135,11 @@ export const MEDIA_PROVIDERS: MediaProvider[] = [
   {
     id: 'custom-image',
     label: 'Custom Image API',
-    hint: 'OpenAI-compatible /v1/images/generations endpoint',
+    hint: 'OpenAI /v1/images/generations or local WebUI (e.g. http://127.0.0.1:7861)',
     integrated: true,
     docsUrl: 'https://platform.openai.com/docs/api-reference/images',
     supportsCustomModel: true,
-    customModelPlaceholder: 'my-image-model',
+    customModelPlaceholder: 'checkpoint.safetensors or my-image-model',
   },
   {
     id: 'bfl',
@@ -389,7 +389,7 @@ export const IMAGE_MODELS: MediaModel[] = [
   {
     id: 'custom-image',
     label: 'custom-image',
-    hint: 'Custom · OpenAI-compatible endpoint',
+    hint: 'Custom · OpenAI-compatible or local WebUI',
     provider: 'custom-image',
     caps: ['t2i'],
   },

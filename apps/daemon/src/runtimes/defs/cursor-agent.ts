@@ -47,6 +47,7 @@ export const cursorAgentDef = {
     fallbackModels: [
       DEFAULT_MODEL_OPTION,
       { id: 'auto', label: 'auto' },
+      { id: 'composer-2.5', label: 'Composer 2.5' },
       { id: 'sonnet-4', label: 'sonnet-4' },
       { id: 'sonnet-4-thinking', label: 'sonnet-4-thinking' },
       { id: 'gpt-5', label: 'gpt-5' },

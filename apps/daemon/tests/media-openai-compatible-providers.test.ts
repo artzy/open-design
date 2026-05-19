@@ -110,6 +110,57 @@ describe('OpenAI-compatible media providers', () => {
     expect(bytes.length).toBeGreaterThan(0);
   });
 
+  it('renders local Stable Diffusion WebUI through /sdapi/v1/txt2img', async () => {
+    await writeConfig({
+      providers: {
+        'custom-image': {
+          baseUrl: 'http://127.0.0.1:7861',
+          model: '512-inpainting-ema.safetensors',
+        },
+      },
+    });
+
+    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
+      expect(String(input)).toBe('http://127.0.0.1:7861/sdapi/v1/txt2img');
+      expect(init?.method).toBe('POST');
+      expect(init?.headers).toMatchObject({
+        'content-type': 'application/json',
+      });
+      expect(init?.headers).not.toHaveProperty('authorization');
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      expect(body.prompt).toBe('A watercolor landscape at dusk');
+      expect(body.width).toBe(1024);
+      expect(body.height).toBe(1024);
+      expect(body.steps).toBe(20);
+      expect(body.override_settings).toEqual({
+        sd_model_checkpoint: '512-inpainting-ema.safetensors',
+      });
+      return new Response(JSON.stringify({
+        images: [PNG_BASE64],
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateMedia({
+      projectRoot,
+      projectsRoot,
+      projectId: 'project-1',
+      surface: 'image',
+      model: 'custom-image',
+      prompt: 'A watercolor landscape at dusk',
+      output: 'webui.png',
+    });
+
+    expect(result.providerId).toBe('custom-image');
+    expect(result.providerNote).toContain('custom-image/webui/512-inpainting-ema.safetensors');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const bytes = await readFile(path.join(projectsRoot, 'project-1', 'webui.png'));
+    expect(bytes.length).toBeGreaterThan(0);
+  });
+
   it('routes matching OpenAI image catalog ids through the configured custom provider', async () => {
     await writeConfig({
       providers: {
