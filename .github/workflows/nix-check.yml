@@ -4,26 +4,17 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.mdx'
-      - '**/*.txt'
-      - LICENSE
-      - .gitignore
-      - .editorconfig
-      - .vscode/**
-      - .idea/**
-      - docs/**
-      - assets/**
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
-      - '**/*.webp'
-      - .github/ISSUE_TEMPLATE/**
-      - .github/PULL_REQUEST_TEMPLATE.md
-      - .github/CODEOWNERS
+    paths:
+      - flake.nix
+      - flake.lock
+      - nix/**
+      - pnpm-lock.yaml
+      - package.json
+      - pnpm-workspace.yaml
+      - apps/**/package.json
+      - packages/**/package.json
+      - tools/**/package.json
+      - e2e/package.json
   workflow_dispatch:
 
 env:
@@ -57,4 +48,12 @@ jobs:
       #     skipPush: ${{ secrets.CACHIX_AUTH_TOKEN == '' }}
 
       - name: nix flake check
-        run: nix flake check --print-build-logs --keep-going
+        run: |
+          set -o pipefail
+          if ! nix flake check --print-build-logs --keep-going 2>&1 | tee nix-check.log; then
+            got_hash="$(grep -E '^\s+got:\s+' nix-check.log | head -1 | awk '{print $2}')"
+            if [ -n "$got_hash" ]; then
+              echo "::error title=Stale pnpmDepsHash::Set pnpmDepsHash in nix/package-daemon.nix and nix/package-web.nix to ${got_hash} (see nix/README.md)."
+            fi
+            exit 1
+          fi
