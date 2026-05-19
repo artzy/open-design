@@ -27,6 +27,9 @@ on:
   issues:
     types: [closed]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 # Read-only. Discord post goes via webhook URL (a secret), not GitHub auth.
 # - contents:read       : required by repos.listPullRequestsAssociatedWithCommit
 # - issues:read         : timeline + issue body
